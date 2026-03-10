@@ -61,8 +61,23 @@ A RESTful backend API built with Node.js, Express, and MongoDB to manage user da
    - **Production:** `npm start`
    - **Development:** `npm run dev`
 
-## Deployment
-This API is ready to be deployed on platforms like **Render**.
+## Deployment to Render
+
+To deploy this API to [Render](https://render.com/), follow these steps:
+
+1. **Create a New Web Service:** Connect your GitHub repository.
+2. **Configure Build & Start Commands:**
+   - **Build Command:** `npm install`
+   - **Start Command:** `npm start`
+3. **Set Environment Variables:**
+   - Go to the **Environment** tab in your Render service dashboard.
+   - Add the following variables:
+     - `MONGO_URI`: Your full MongoDB Atlas connection string (e.g., `mongodb+srv://<username>:<password>@cluster0...`).
+     - `PORT`: `10000` (Render's default) or leave blank as the app defaults to `process.env.PORT`.
+4. **Deploy:** Click **Create Web Service**.
+
+> [!IMPORTANT]
+> Failure to set the `MONGO_URI` in the Render dashboard will cause a connection error during deployment.
 
 ## GitHub Push Instructions
 
