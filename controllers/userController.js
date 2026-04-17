@@ -3,17 +3,19 @@ const User = require('../models/userModel');
 // @desc    Create a new user
 // @route   POST /users
 // @access  Public
-const createUser = async (req, res) => {
+const createUser = async (req, res, next) => {
   try {
     const { name, email, age, gender } = req.body;
 
     if (!name || !email || !age || !gender) {
-      return res.status(400).json({ message: 'Please provide all required fields' });
+      res.status(400);
+      throw new Error('Please provide all required fields');
     }
 
     const userExists = await User.findOne({ email });
     if (userExists) {
-      return res.status(400).json({ message: 'User already exists' });
+      res.status(400);
+      throw new Error('User already exists');
     }
 
     const user = await User.create({
@@ -23,47 +25,101 @@ const createUser = async (req, res) => {
       gender,
     });
 
-    res.status(201).json(user);
+    res.status(201).json({
+      status: 'success',
+      data: user,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 };
 
-// @desc    Get all users
+// @desc    Get all users (with pagination, filtering, sorting)
 // @route   GET /users
 // @access  Public
-const getUsers = async (req, res) => {
+const getUsers = async (req, res, next) => {
   try {
-    const users = await User.find({});
-    res.status(200).json(users);
+    // 1. Filtering
+    const queryObj = { ...req.query };
+    const excludedFields = ['page', 'sort', 'limit', 'fields', 'search'];
+    excludedFields.forEach((el) => delete queryObj[el]);
+
+    let queryStr = JSON.stringify(queryObj);
+    queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, (match) => `$${match}`);
+    
+    let query = User.find(JSON.parse(queryStr));
+
+    // 2. Search (by name or email)
+    if (req.query.search) {
+      const search = req.query.search;
+      query = query.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+        ],
+      });
+    }
+
+    // 3. Sorting
+    if (req.query.sort) {
+      const sortBy = req.query.sort.split(',').join(' ');
+      query = query.sort(sortBy);
+    } else {
+      query = query.sort('-createdAt');
+    }
+
+    // 4. Pagination
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    query = query.skip(skip).limit(limit);
+
+    // Execute query
+    const users = await query;
+    const total = await User.countDocuments(JSON.parse(queryStr));
+
+    res.status(200).json({
+      status: 'success',
+      results: users.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      data: users,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 };
 
 // @desc    Get a single user by ID
 // @route   GET /users/:id
 // @access  Public
-const getUserById = async (req, res) => {
+const getUserById = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      res.status(404);
+      throw new Error('User not found');
     }
-    res.status(200).json(user);
+    res.status(200).json({
+      status: 'success',
+      data: user,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 };
 
 // @desc    Update full user details
 // @route   PUT /users/:id
 // @access  Public
-const updateUser = async (req, res) => {
+const updateUser = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      res.status(404);
+      throw new Error('User not found');
     }
 
     const updatedUser = await User.findByIdAndUpdate(req.params.id, req.body, {
@@ -71,47 +127,62 @@ const updateUser = async (req, res) => {
       runValidators: true,
     });
 
-    res.status(200).json(updatedUser);
+    res.status(200).json({
+      status: 'success',
+      data: updatedUser,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 };
 
 // @desc    Update specific user fields
 // @route   PATCH /users/:id
 // @access  Public
-const patchUser = async (req, res) => {
+const patchUser = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      res.status(404);
+      throw new Error('User not found');
     }
 
-    const updatedUser = await User.findByIdAndUpdate(req.params.id, { $set: req.body }, {
-      new: true,
-      runValidators: true,
-    });
+    const updatedUser = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: req.body },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
 
-    res.status(200).json(updatedUser);
+    res.status(200).json({
+      status: 'success',
+      data: updatedUser,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 };
 
 // @desc    Delete a user
 // @route   DELETE /users/:id
 // @access  Public
-const deleteUser = async (req, res) => {
+const deleteUser = async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      res.status(404);
+      throw new Error('User not found');
     }
 
     await user.deleteOne();
-    res.status(200).json({ message: 'User deleted successfully' });
+    res.status(200).json({
+      status: 'success',
+      message: 'User deleted successfully',
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    next(error);
   }
 };
 
@@ -123,3 +194,4 @@ module.exports = {
   patchUser,
   deleteUser,
 };
+
